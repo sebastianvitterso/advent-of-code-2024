@@ -1,0 +1,12 @@
+{
+  "name": "advent-of-code-2024",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {},
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
