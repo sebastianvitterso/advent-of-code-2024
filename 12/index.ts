@@ -13,10 +13,49 @@ ABBAAA
 ABBAAA
 AAAAAA`
 
-const grid = testInput
+const grid = input
   .trim()
   .split('\n')
   .map((row) => row.split(''))
+
+enum CardinalDirection {
+  NORTH = 'N',
+  SOUTH = 'S',
+  EAST = 'E',
+  WEST = 'W',
+}
+namespace CardinalDirection {
+  export function isHorizontal(direction: CardinalDirection): boolean {
+    return [CardinalDirection.NORTH, CardinalDirection.SOUTH].includes(direction)
+  }
+  export function isVertical(direction: CardinalDirection): boolean {
+    return [CardinalDirection.EAST, CardinalDirection.WEST].includes(direction)
+  }
+  export function getOpposite(direction: CardinalDirection): CardinalDirection {
+    switch (direction) {
+      case CardinalDirection.NORTH:
+        return CardinalDirection.SOUTH
+      case CardinalDirection.SOUTH:
+        return CardinalDirection.NORTH
+      case CardinalDirection.EAST:
+        return CardinalDirection.WEST
+      case CardinalDirection.WEST:
+        return CardinalDirection.EAST
+    }
+  }
+  export function getNeighbor(direction: CardinalDirection, x: number, y: number): [number, number] {
+    switch (direction) {
+      case CardinalDirection.NORTH:
+        return [x, y - 1]
+      case CardinalDirection.SOUTH:
+        return [x, y + 1]
+      case CardinalDirection.EAST:
+        return [x + 1, y]
+      case CardinalDirection.WEST:
+        return [x - 1, y]
+    }
+  }
+}
 
 class GardenMap {
   constructor(public grid: string[][]) {}
@@ -94,12 +133,20 @@ class Region {
     const fencesToKeep: Record<string, FenceSection> = {}
     for (const plot of this.plots) {
       for (const fenceSection of plot.perimeterFenceSections) {
-        if (allFences.has(fenceSection.toString())) {
-          delete fencesToKeep[fenceSection.toString()]
+        allFences.add(fenceSection.toString())
+        const oppositeDirection = CardinalDirection.getOpposite(fenceSection.direction)
+        const [neighborX, neighborY] = CardinalDirection.getNeighbor(
+          fenceSection.direction,
+          fenceSection.x,
+          fenceSection.y,
+        )
+        const oppositeFenceSection = new FenceSection(oppositeDirection, neighborX, neighborY)
+
+        if (allFences.has(oppositeFenceSection.toString())) {
+          delete fencesToKeep[oppositeFenceSection.toString()]
           continue
         }
 
-        allFences.add(fenceSection.toString())
         fencesToKeep[fenceSection.toString()] = fenceSection
       }
     }
@@ -123,7 +170,7 @@ class Region {
       if (matchingBuilders.length === 0) {
         const newFenceSegmentBuilder = new FenceSegmentBuilder(
           fenceSection.direction,
-          fenceSection.direction === FenceDirection.HORIZONTAL ? fenceSection.y : fenceSection.x,
+          CardinalDirection.isHorizontal(fenceSection.direction) ? fenceSection.y : fenceSection.x,
         )
         newFenceSegmentBuilder.addFenceSection(fenceSection)
         fenceSegmentBuilders.add(newFenceSegmentBuilder)
@@ -149,10 +196,11 @@ class Region {
 
   getFenceCostWithBulkDiscount(): number {
     const fenceSegments = this.getFenceSegments()
-    console.log(
-      `Fence segments for ${this.crop}:`,
-      fenceSegments.map((segment) => `${segment.direction} ${segment.index} (${segment.getLength()})`),
-    )
+    // console.log(
+    //   `Fence segments for ${this.crop}:`,
+    //   fenceSegments.map((segment) => `${segment.direction} ${segment.index} (${segment.getLength()})`),
+    //   `Price: ${this.getArea()}*${fenceSegments.length} = ${this.getArea() * fenceSegments.length}`,
+    // )
     return this.getArea() * fenceSegments.length
   }
 
@@ -192,21 +240,17 @@ class Plot {
    */
   get perimeterFenceSections(): FenceSection[] {
     return [
-      new FenceSection(FenceDirection.VERTICAL, this.x, this.y),
-      new FenceSection(FenceDirection.VERTICAL, this.x + 1, this.y),
-      new FenceSection(FenceDirection.HORIZONTAL, this.x, this.y),
-      new FenceSection(FenceDirection.HORIZONTAL, this.x, this.y + 1),
+      new FenceSection(CardinalDirection.NORTH, this.x, this.y),
+      new FenceSection(CardinalDirection.EAST, this.x, this.y),
+      new FenceSection(CardinalDirection.SOUTH, this.x, this.y),
+      new FenceSection(CardinalDirection.WEST, this.x, this.y),
     ]
   }
 }
 
-enum FenceDirection {
-  HORIZONTAL = 'horizontal',
-  VERTICAL = 'vertical',
-}
 class FenceSection {
   constructor(
-    public direction: FenceDirection,
+    public direction: CardinalDirection,
     public x: number,
     public y: number,
   ) {}
@@ -217,8 +261,15 @@ class FenceSection {
 
   public isInlineWith(fenceSection: FenceSection): boolean {
     if (this.direction !== fenceSection.direction) return false
-    if (this.direction === FenceDirection.HORIZONTAL && this.y === fenceSection.y) return true
-    if (this.direction === FenceDirection.VERTICAL && this.x === fenceSection.x) return true
+    if (CardinalDirection.isHorizontal(this.direction) && this.y === fenceSection.y) return true
+    if (CardinalDirection.isVertical(this.direction) && this.x === fenceSection.x) return true
+    return false
+  }
+
+  public isInlineNeighbor(fenceSection: FenceSection): boolean {
+    if (!this.isInlineWith(fenceSection)) return false
+    if (CardinalDirection.isHorizontal(this.direction) && Math.abs(this.x - fenceSection.x) === 1) return true
+    if (CardinalDirection.isVertical(this.direction) && Math.abs(this.y - fenceSection.y) === 1) return true
     return false
   }
 }
@@ -230,15 +281,15 @@ class FenceSegmentBuilder {
   public fenceSections: FenceSection[] = []
 
   constructor(
-    public direction: FenceDirection,
+    public direction: CardinalDirection,
     public index: number,
   ) {}
 
   public shouldContain(fenceSection: FenceSection): boolean {
     if (fenceSection.direction !== this.direction) return false
-    if (fenceSection.direction === FenceDirection.HORIZONTAL && fenceSection.y === this.index) return true
-    if (fenceSection.direction === FenceDirection.VERTICAL && fenceSection.x === this.index) return true
-    return false
+    if (CardinalDirection.isHorizontal(this.direction) && fenceSection.y !== this.index) return false
+    if (CardinalDirection.isVertical(this.direction) && fenceSection.x !== this.index) return false
+    return this.fenceSections.some((section) => section.isInlineNeighbor(fenceSection))
   }
 
   public addFenceSection(fenceSection: FenceSection): void {
@@ -258,7 +309,7 @@ class FenceSegmentBuilder {
 
 class FenceSegment {
   constructor(
-    public direction: FenceDirection,
+    public direction: CardinalDirection,
     public index: number,
     public fenceSections: FenceSection[],
   ) {}
