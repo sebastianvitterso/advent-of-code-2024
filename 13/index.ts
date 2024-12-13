@@ -48,8 +48,7 @@ class ClawMachine {
 
     // TODO: Consider moving this to a separate class, as the logic for finding combinations will need to be totally different for part 2
     if (performAdjustment) {
-      this.buttonAMovement = ClawMachine.adjustMovement(this.buttonAMovement)
-      this.buttonBMovement = ClawMachine.adjustMovement(this.buttonBMovement)
+      this.prizeLocation = ClawMachine.adjustCoordinate(this.prizeLocation)
     }
   }
 
@@ -67,10 +66,10 @@ class ClawMachine {
     return { x, y }
   }
 
-  private static adjustMovement(movement: Coordinate): Coordinate {
+  private static adjustCoordinate(coordinate: Coordinate): Coordinate {
     return {
-      x: movement.x + 10000000000000,
-      y: movement.y + 10000000000000,
+      x: coordinate.x + 10000000000000,
+      y: coordinate.y + 10000000000000,
     }
   }
 
@@ -91,7 +90,13 @@ class ClawMachine {
     return { combination, cost }
   }
 
-  private getCombinationCost(a: number, b: number): number {
+  public analyticallyFindCombinationCost(): { combination: { a: number; b: number }; cost: number } | null {
+    const combination = this.analyticallyFindCombination()
+    if (combination === null) return null
+    return { combination, cost: this.getCombinationCost(combination.a, combination.b) }
+  }
+
+  public getCombinationCost(a: number, b: number): number {
     return a * ClawMachine.A_COST + b * ClawMachine.B_COST
   }
 
@@ -107,11 +112,23 @@ class ClawMachine {
     return moveCombinations
   }
 
-  private testMoveCombination(a: number, b: number): boolean {
-    const currentPosition = { x: 0, y: 0 }
-    currentPosition.x += a * this.buttonAMovement.x + b * this.buttonBMovement.x
-    currentPosition.y += a * this.buttonAMovement.y + b * this.buttonBMovement.y
-    return currentPosition.x === this.prizeLocation.x && currentPosition.y === this.prizeLocation.y
+  public testMoveCombination(a: number, b: number): boolean {
+    const x = a * this.buttonAMovement.x + b * this.buttonBMovement.x
+    const y = a * this.buttonAMovement.y + b * this.buttonBMovement.y
+    return x === this.prizeLocation.x && y === this.prizeLocation.y
+  }
+
+  public analyticallyFindCombination(): { a: number; b: number } | null {
+    const { x: aX, y: aY } = this.buttonAMovement
+    const { x: bX, y: bY } = this.buttonBMovement
+    const { x, y } = this.prizeLocation
+
+    const bCount = (y * aX - x * aY) / (aX * bY - aY * bX)
+    const aCount = (x - bCount * bX) / aX
+    if (Number.isInteger(aCount) && Number.isInteger(bCount)) {
+      return { a: aCount, b: bCount }
+    }
+    return null
   }
 }
 
@@ -124,7 +141,9 @@ const totalCostForAvailablePrizes = cheapestMoves
 console.log(totalCostForAvailablePrizes)
 
 const adjustedClawMachines = clawMachineInputs.map((input) => new ClawMachine(input, true))
-const cheapestAdjustedMoves = adjustedClawMachines.map((clawMachine) => clawMachine.findCheapestCombination())
-const totalCostForAdjustedPrizes = cheapestAdjustedMoves
+const adjustedCombinations = adjustedClawMachines.map((clawMachine) => clawMachine.analyticallyFindCombinationCost())
+
+const totalCostForAdjustedPrizes = adjustedCombinations
   .filter((move) => move !== null)
   .reduce((totalCost, move) => totalCost + move.cost, 0)
+console.log(totalCostForAdjustedPrizes)
